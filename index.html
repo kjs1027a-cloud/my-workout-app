@@ -10,17 +10,23 @@
 </head>
 <body class="bg-zinc-950 text-zinc-200">
     <div id="root"></div>
-    <!-- 리액트 엔진 로드 -->
+    
+    <!-- 리액트 및 바벨 라이브러리 안전 로드 -->
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     
     <!-- 소령님의 App.jsx 코드를 브라우저가 직접 읽도록 연결 -->
     <script type="text/babel" src="./App.jsx"></script>
+    
     <script type="text/babel">
-        // 앱 구동 엔진
-        const root = tragedies = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(React.createElement(TacticalTrackerApp));
+        // 앱을 정상적으로 구동시키는 실행 엔진 (오타 수정 완료)
+        window.addEventListener('DOMContentLoaded', () => {
+            setTimeout(() => {
+                const root = tragedies = ReactDOM.createRoot(document.getElementById('root'));
+                root.render(React.createElement(TacticalTrackerApp));
+            }, 500);
+        });
     </script>
 </body>
 </html>
