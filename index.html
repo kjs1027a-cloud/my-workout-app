@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tactical Tracker</title>
+    <!-- Tailwind CSS 및 Lucide 아이콘 라이브러리 모바일 자동 로드 -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body class="bg-zinc-950 text-zinc-200">
+    <div id="root"></div>
+    <!-- 리액트 엔진 로드 -->
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- 소령님의 App.jsx 코드를 브라우저가 직접 읽도록 연결 -->
+    <script type="text/babel" src="./App.jsx"></script>
+    <script type="text/babel">
+        // 앱 구동 엔진
+        const root = tragedies = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(React.createElement(TacticalTrackerApp));
+    </script>
+</body>
+</html>
