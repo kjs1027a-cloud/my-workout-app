@@ -37,7 +37,7 @@ const routineDB = {
 
 export default function TacticalTrackerApp() {
   const [activeTab, setActiveTab] = useState('dashboard');
-  
+ 
   const [history, setHistory] = useState([
     { date: '2026-06-16', type: 'A', totalTime: 65, condition: 4, sleep: 6.5 },
     { date: '2026-06-17', type: 'B', totalTime: 72, condition: 3, sleep: 5.5 },
@@ -46,7 +46,7 @@ export default function TacticalTrackerApp() {
   const [currentSession, setCurrentSession] = useState(null);
   const [workoutTimer, setWorkoutTimer] = useState(0);
   const [isTimerRunning, setIsTimerRunning] = useState(false);
-  
+ 
   const [preCondition, setPreCondition] = useState(3);
   const [preSleep, setPreSleep] = useState(6);
   const [selectedRoutine, setSelectedRoutine] = useState('A');
@@ -73,12 +73,12 @@ export default function TacticalTrackerApp() {
       const gain = ctx.createGain();
       osc.connect(gain);
       gain.connect(ctx.destination);
-      
+     
       osc.type = type;
       osc.frequency.setValueAtTime(freq, ctx.currentTime);
       gain.gain.setValueAtTime(vol, ctx.currentTime);
       gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
-      
+     
       osc.start(ctx.currentTime);
       osc.stop(ctx.currentTime + duration);
     } catch(e) {
@@ -110,7 +110,7 @@ export default function TacticalTrackerApp() {
             // 10분 종료
             setBpmState('finished');
             playTick(1200, 'square', 1.0, 1); // 훈련 종료음
-            
+           
             // 데이터 자동 기록: 10분간 30BPM = 총 300회
             setExerciseLogs(prev => {
               const currentLogs = [...(prev['b3'] || [])];
@@ -121,7 +121,7 @@ export default function TacticalTrackerApp() {
             });
             return 0;
           }
-          
+         
           const newTime = prevTime - 1;
           // 30 BPM: 60초 / 30회 = 2초당 1회 타격음 발생
           if (newTime % 2 === 0) {
@@ -156,7 +156,7 @@ export default function TacticalTrackerApp() {
     setIsTimerRunning(true);
     setFeedbackNote('');
     setBpmState('idle'); // BPM 상태 초기화
-    
+   
     const initialLogs = {};
     routineDB[selectedRoutine].exercises.forEach(ex => {
       initialLogs[ex.id] = Array.from({ length: ex.targetSets }, () => ({ weight: '', reps: '' }));
@@ -215,7 +215,7 @@ export default function TacticalTrackerApp() {
   const renderDashboard = () => {
     const workoutsThisWeek = history.length;
     const isMakeupNeeded = workoutsThisWeek < 3;
-    
+   
     return (
       <div className="space-y-6 animate-fade-in pb-20">
         <header className="border-b border-zinc-800 pb-4">
@@ -241,7 +241,7 @@ export default function TacticalTrackerApp() {
           <h2 className="text-lg font-bold text-zinc-100 flex items-center gap-2 mb-4">
             <Activity size={20} className="text-emerald-400" /> 신규 세션 준비 (Pre-Workout)
           </h2>
-          
+         
           <div className="grid grid-cols-2 gap-4 mb-5">
             <div className="space-y-2">
               <label className="text-xs text-zinc-400 flex items-center gap-1"><Moon size={14}/> 수면시간 (시간)</label>
@@ -295,7 +295,7 @@ export default function TacticalTrackerApp() {
           {routine.exercises.map((ex) => {
             const isProgressionMet = checkProgression(ex.id, ex.progRule);
             const currentSets = exerciseLogs[ex.id] || [];
-            
+           
             return (
               <div key={ex.id} className="bg-zinc-900 border border-zinc-800 rounded p-4">
                 <div className="flex justify-between items-start mb-3">
@@ -317,7 +317,7 @@ export default function TacticalTrackerApp() {
                 {ex.isBpm && (
                   <div className="bg-zinc-950 p-4 rounded-lg mb-4 border border-emerald-500/30">
                     {bpmState === 'idle' && (
-                      <button 
+                      <button
                         onClick={() => {
                           // 사용자 액션에 의해 AudioContext 최초 초기화 보장
                           if (!audioCtxRef.current) {
@@ -347,7 +347,7 @@ export default function TacticalTrackerApp() {
                               {Math.floor(bpmTimeLeft / 60)}:{(bpmTimeLeft % 60).toString().padStart(2, '0')}
                             </p>
                           </div>
-                          
+                         
                           {/* 박자 타격 시 점멸하는 인디케이터 */}
                           <div className={`w-12 h-12 rounded-full border-2 flex items-center justify-center transition-all duration-100 ${bpmTimeLeft % 2 === 0 ? 'bg-emerald-500/40 border-emerald-400 scale-110 shadow-[0_0_15px_rgba(16,185,129,0.5)]' : 'bg-transparent border-zinc-700 scale-100'}`}>
                             <Activity size={24} className={bpmTimeLeft % 2 === 0 ? 'text-emerald-300' : 'text-zinc-600'} />
@@ -380,21 +380,21 @@ export default function TacticalTrackerApp() {
                     <span className="text-[10px] text-zinc-500 text-center uppercase">중량 (kg)</span>
                     <span className="text-[10px] text-zinc-500 text-center uppercase">횟수 (회)</span>
                   </div>
-                  
+                 
                   {currentSets.map((setInfo, idx) => (
                     <div key={idx} className={`grid grid-cols-[40px_1fr_1fr] gap-2 items-center rounded p-1 ${ex.isBpm && bpmState === 'finished' ? 'bg-emerald-900/30' : 'bg-zinc-950'}`}>
                       <div className={`text-xs text-center font-mono font-bold rounded h-full flex items-center justify-center ${ex.isBpm && bpmState === 'finished' ? 'bg-emerald-800 text-emerald-200' : 'bg-zinc-800 text-zinc-400'}`}>
                         {idx + 1}
                       </div>
-                      <input 
+                      <input
                         type="number" placeholder="-" value={setInfo.weight}
                         onChange={(e) => handleSetChange(ex.id, idx, 'weight', e.target.value)}
-                        className={`w-full bg-transparent text-center py-1 border-b focus:outline-none text-sm ${ex.isBpm && bpmState === 'finished' ? 'text-emerald-200 border-emerald-700/50' : 'text-white border-zinc-800 focus:border-emerald-500'}`} 
+                        className={`w-full bg-transparent text-center py-1 border-b focus:outline-none text-sm ${ex.isBpm && bpmState === 'finished' ? 'text-emerald-200 border-emerald-700/50' : 'text-white border-zinc-800 focus:border-emerald-500'}`}
                       />
-                      <input 
+                      <input
                         type="number" placeholder="-" value={setInfo.reps}
                         onChange={(e) => handleSetChange(ex.id, idx, 'reps', e.target.value)}
-                        className={`w-full bg-transparent text-center py-1 border-b focus:outline-none text-sm font-bold ${ex.isBpm && bpmState === 'finished' ? 'text-emerald-400 border-emerald-700/50' : 'text-white border-zinc-800 focus:border-emerald-500'}`} 
+                        className={`w-full bg-transparent text-center py-1 border-b focus:outline-none text-sm font-bold ${ex.isBpm && bpmState === 'finished' ? 'text-emerald-400 border-emerald-700/50' : 'text-white border-zinc-800 focus:border-emerald-500'}`}
                       />
                     </div>
                   ))}
@@ -418,7 +418,7 @@ export default function TacticalTrackerApp() {
 
         <div className="bg-zinc-900 border border-zinc-800 rounded p-4">
           <label className="text-sm font-bold text-zinc-400 mb-2 block">훈련 후기 / 식단 특이사항 (AAR)</label>
-          <textarea 
+          <textarea
             value={feedbackNote}
             onChange={(e) => setFeedbackNote(e.target.value)}
             placeholder="과당 섭취 최소화 여부, 특이 통증 등 기록..."
@@ -426,7 +426,7 @@ export default function TacticalTrackerApp() {
           ></textarea>
         </div>
 
-        <button 
+        <button
           onClick={handleFinishWorkout}
           className="w-full bg-red-900/40 border border-red-500/50 hover:bg-red-900/60 text-red-400 font-bold py-4 rounded transition-all mt-6 flex justify-center items-center gap-2">
           <StopSquare size={18} /> 훈련 종료 및 데이터 저장
@@ -489,7 +489,7 @@ export default function TacticalTrackerApp() {
           </div>
         </nav>
       </div>
-      
+     
       <style dangerouslySetInnerHTML={{__html: `
         @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
         .animate-fade-in { animation: fadeIn 0.3s ease-out forwards; }
@@ -499,5 +499,6 @@ export default function TacticalTrackerApp() {
     </div>
   );
 }
+
 
 ```
