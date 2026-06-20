@@ -1,0 +1,1477 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { 
+  Dumbbell, 
+  Clock, 
+  Calendar as CalendarIcon, 
+  CheckCircle2, 
+  Award, 
+  BookOpen, 
+  History, 
+  TrendingUp, 
+  Plus, 
+  Trash2, 
+  Smile, 
+  Check, 
+  Flame, 
+  RotateCcw,
+  Sparkles,
+  ArrowRightLeft,
+  Info,
+  Minus,
+  Play,
+  Square,
+  Volume2,
+  VolumeX,
+  Timer,
+  ChevronLeft,
+  ChevronRight
+} from 'lucide-react';
+
+// 글로벌 오디오 컨텍스트 관리 객체
+let globalAudioCtx = null;
+
+const initAudioContext = () => {
+  if (!globalAudioCtx) {
+    globalAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  }
+  if (globalAudioCtx.state === 'suspended') {
+    globalAudioCtx.resume();
+  }
+};
+
+// 메트로놈 우드블록 타격음 물리 합성
+const playWoodblockSound = (isHigh = false) => {
+  try {
+    initAudioContext();
+    if (!globalAudioCtx || globalAudioCtx.state === 'suspended') return;
+
+    const osc = globalAudioCtx.createOscillator();
+    const gain = globalAudioCtx.createGain();
+    
+    osc.connect(gain);
+    gain.connect(globalAudioCtx.destination);
+    
+    const baseFreq = isHigh ? 1200 : 800;
+    osc.frequency.setValueAtTime(baseFreq, globalAudioCtx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(100, globalAudioCtx.currentTime + 0.05);
+    
+    osc.type = 'sine';
+    
+    gain.gain.setValueAtTime(0.6, globalAudioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, globalAudioCtx.currentTime + 0.08);
+    
+    osc.start(globalAudioCtx.currentTime);
+    osc.stop(globalAudioCtx.currentTime + 0.1);
+  } catch (e) {
+    console.warn("오디오 재생 실패:", e);
+  }
+};
+
+const createInitialSets = (count) => {
+  return Array.from({ length: count }, (_, i) => ({
+    setNumber: i + 1,
+    weight: '',
+    reps: '',
+    completed: false
+  }));
+};
+
+// Routine A: 가슴, 등 (순서 교체 반영: 펙 덱 플라이 3번 -> 푸쉬업 4번)
+const ROUTINE_A = [
+  { id: 'a1', name: '플랫 벤치프레스 / 또는 해머벤치프레스', targetReps: '8 - 20회', targetSets: '5 - 7세트', notes: '', completed: false, sets: createInitialSets(5) },
+  { id: 'a2', name: '체스트 프레스', targetReps: '8 - 20회', targetSets: '3세트', notes: '', completed: false, sets: createInitialSets(3) },
+  { id: 'a4', name: '펙 덱 플라이', targetReps: '측정식', targetSets: '2세트', notes: '자극 위주', completed: false, sets: createInitialSets(2) }, 
+  { id: 'a3', name: '푸쉬업', targetReps: '측정식', targetSets: '1세트', notes: '', completed: false, sets: createInitialSets(1) }, 
+  { id: 'a5', name: '턱걸이', targetReps: '자율', targetSets: '5 - 7세트', notes: '', completed: false, sets: createInitialSets(5) },
+  { id: 'a6', name: '렛풀다운(프론트)', targetReps: '12 - 15회', targetSets: '4세트', notes: '마지막세트는 20회 이상 가능한 중량으로 실시', completed: false, sets: createInitialSets(4) },
+  { id: 'a7', name: '렛풀다운(비하인드)', targetReps: '12 - 15회', targetSets: '4세트', notes: '', completed: false, sets: createInitialSets(4) },
+  { id: 'a8', name: '시티드 로우', targetReps: '12 - 15회', targetSets: '4세트', notes: '', completed: false, sets: createInitialSets(4) },
+  { id: 'a9', name: '셋업 또는 크런치', targetReps: '자율', targetSets: '5세트', notes: '', completed: false, sets: createInitialSets(5) },
+  { id: 'a10', name: '유산소 훈련', targetReps: '감도있게', targetSets: '15분 이내', notes: '상체운동일 감도있게 권장', completed: false, sets: createInitialSets(1) },
+];
+
+// Routine B: 하체, 팔, 어깨
+const ROUTINE_B = [
+  { id: 'b1', name: '레그익스텐션', targetReps: '15 - 20회', targetSets: '4세트', notes: '', completed: false, sets: createInitialSets(4) },
+  { id: 'b2', name: '레그프레스', targetReps: '10회 - 15회', targetSets: '4세트', notes: '', completed: false, sets: createInitialSets(4) },
+  { id: 'b3', name: 'BPM 스쿼트', targetReps: '30BPM 메트로놈 동기화', targetSets: '1세트', notes: '30박자에 맞춰 10분간 수행', completed: false, sets: [{ setNumber: 1, weight: '맨몸', reps: '0', completed: false }] },
+  { id: 'b4', name: '바벨 컬', targetReps: '12 - 15회', targetSets: '5세트', notes: '같은 무게로 15회 5세트 가능시 중량 UP', completed: false, sets: createInitialSets(5) },
+  { id: 'b5', name: '덤벨 컬', targetReps: '자율', targetSets: '3세트', notes: '', completed: false, sets: createInitialSets(3) },
+  { id: 'b6', name: '트라이셉스 익스텐션', targetReps: '자율', targetSets: '5세트', notes: '같은 무게로 15회 5세트 가능시 중량 UP', completed: false, sets: createInitialSets(5) },
+  { id: 'b7', name: '프레스다운', targetReps: '20회 이상', targetSets: '3세트', notes: '', completed: false, sets: createInitialSets(3) },
+  { id: 'b8', name: '비하인드 넥프레스 (스미스 머신)', targetReps: '20회 - 30회', targetSets: '4세트', notes: '휴식시간 1분 이내', completed: false, sets: createInitialSets(4) },
+  { id: 'b9', name: '머신 숄더프레스', targetReps: '15회 - 20회', text: '3세트', notes: '휴식시간 1분 이내', completed: false, sets: createInitialSets(3) },
+  { id: 'b10', name: '사이드레터럴 레이즈', targetReps: '40회 이상', targetSets: '3세트', notes: '40회 이상 가능한 무게 / 60회 달성 시 무게 UP', completed: false, sets: createInitialSets(3) },
+  { id: 'b11', name: '유산소 훈련', targetReps: '자율', targetSets: '권장 시간', notes: '피로도에 따라 미실시 가능', completed: false, sets: createInitialSets(1) },
+];
+
+const GUIDELINES = [
+  "2주간 A, B 번갈아가며 2분할 훈련 실시 (주 3회 빈도로 각 부위 타겟팅)",
+  "BPM 스쿼트는 30 BPM 메트로놈 장치(2초에 1회 비프음)에 정확히 싱크하여 10분간 불굴의 기상으로 완수합니다.",
+  "각 세트마다 자신이 실제로 수행한 중량(kg)과 횟수(reps)를 디테일하게 기록하고 전회차 세트 기록과 완벽하게 대조합니다.",
+  "바벨 컬, 트라이셉스 익스텐션 등 팔 운동은 정해진 목표 완료 시 과감하게 중량을 올립니다.",
+  "어깨 복합 관절 운동(비하인드 넥프레스, 머신 숄더프레스) 진행 시 세트 사이 휴식 시간은 반드시 1분 이내로 타이트하게 제한합니다.",
+  "사이드레터럴 레이즈는 저중량 고반복(40회 이상 가능 중량)으로 시작해 60회 달성 시 다음 단계 중량으로 업그레이드합니다.",
+  "과당 음료나 식후 과일 등 단순 당 섭취를 최소화하며, 건강한 일반식 베이스에 간식 보충제 섭취를 지향합니다."
+];
+
+export default function App() {
+  const [activeTab, setActiveTab] = useState('workout');
+  const [selectedRoutine, setSelectedRoutine] = useState('A');
+  const [exercises, setExercises] = useState([]);
+  const [history, setHistory] = useState([]);
+  
+  // 메타 정보 상태
+  const [date, setDate] = useState('');
+  const [condition, setCondition] = useState('Good ⚡');
+  const [sleepTime, setSleepTime] = useState('7');
+  const [notes, setNotes] = useState(''); 
+
+  // 일반 타이머 관련 상태
+  const [startTime, setStartTime] = useState(null);
+  const [endTime, setEndTime] = useState(null);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const [timerIntervalId, setTimerIntervalId] = useState(null);
+  const [isTimerRunning, setIsTimerRunning] = useState(false);
+
+  // BPM 스쿼트 전용 메트로놈 엔진 상태
+  const [bpmEngineOpen, setBpmEngineOpen] = useState(false);
+  const [bpmState, setBpmState] = useState('IDLE');
+  const [countdownVal, setCountdownVal] = useState(5);
+  const [bpmTimeLeft, setBpmTimeLeft] = useState(600);
+  const [squatCount, setSquatCount] = useState(0);
+  const [isMuted, setIsMuted] = useState(false);
+  const [visualPulse, setVisualPulse] = useState(false);
+
+  // 달력 위젯 동적 조작을 위한 상태
+  const [currentCalendarYear, setCurrentCalendarYear] = useState(new Date().getFullYear());
+  const [currentCalendarMonth, setCurrentCalendarMonth] = useState(new Date().getMonth());
+
+  const metronomeRef = useRef(null);
+  const countdownRef = useRef(null);
+  const clockRef = useRef(null);
+
+  // 알림 모달 상태
+  const [modalMessage, setModalMessage] = useState(null);
+  const [showCelebrate, setShowCelebrate] = useState(false);
+
+  // 초기 로드
+  useEffect(() => {
+    const today = new Date().toISOString().split('T')[0];
+    setDate(today);
+
+    const storedHistory = localStorage.getItem('training_history_multisets_v4');
+    let loadedHistory = [];
+    if (storedHistory) {
+      try {
+        loadedHistory = JSON.parse(storedHistory);
+        setHistory(loadedHistory);
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    const storedCurrent = localStorage.getItem(`current_session_multisets_v4_routine_${selectedRoutine}`);
+    if (storedCurrent) {
+      try {
+        const parsed = JSON.parse(storedCurrent);
+        setExercises(parsed.exercises);
+        setStartTime(parsed.startTime ? new Date(parsed.startTime) : null);
+        setCondition(parsed.condition || 'Good ⚡');
+        setSleepTime(parsed.sleepTime || '7');
+        setNotes(parsed.notes || '');
+        if (parsed.startTime && !parsed.endTime) {
+          const start = new Date(parsed.startTime);
+          const diff = Math.floor((new Date() - start) / 1000);
+          setElapsedSeconds(diff > 0 ? diff : 0);
+          resumeTimer(start);
+        }
+      } catch (e) {
+        setExercises(selectedRoutine === 'A' ? JSON.parse(JSON.stringify(ROUTINE_A)) : JSON.parse(JSON.stringify(ROUTINE_B)));
+      }
+    } else {
+      setExercises(selectedRoutine === 'A' ? JSON.parse(JSON.stringify(ROUTINE_A)) : JSON.parse(JSON.stringify(ROUTINE_B)));
+    }
+  }, [selectedRoutine]);
+
+  // 타이머 제어
+  const resumeTimer = (start) => {
+    if (isTimerRunning) return;
+    setIsTimerRunning(true);
+    const id = setInterval(() => {
+      setElapsedSeconds(Math.floor((new Date() - start) / 1000));
+    }, 1000);
+    setTimerIntervalId(id);
+  };
+
+  const startTimer = (customStart) => {
+    if (isTimerRunning) return;
+    const actualStart = customStart || new Date();
+    setStartTime(actualStart);
+    setIsTimerRunning(true);
+    
+    const id = setInterval(() => {
+      const now = new Date();
+      setElapsedSeconds(Math.floor((now - (customStart || startTime || now)) / 1000));
+    }, 1000);
+    setTimerIntervalId(id);
+  };
+
+  const stopTimer = () => {
+    if (timerIntervalId) {
+      clearInterval(timerIntervalId);
+      setTimerIntervalId(null);
+    }
+    setIsTimerRunning(false);
+  };
+
+  const handleInputFocus = () => {
+    if (!startTime && !isTimerRunning) {
+      const now = new Date();
+      setStartTime(now);
+      startTimer(now);
+      saveCurrentProgress(exercises, now, condition, sleepTime, notes);
+    }
+  };
+
+  const saveCurrentProgress = (currExs, currStart, currCond, currSleep, currNotes) => {
+    localStorage.setItem(`current_session_multisets_v4_routine_${selectedRoutine}`, JSON.stringify({
+      exercises: currExs,
+      startTime: currStart,
+      condition: currCond,
+      sleepTime: currSleep,
+      notes: currNotes
+    }));
+  };
+
+  // BPM 메트로놈 구동
+  const startBpmSquatEngine = () => {
+    initAudioContext();
+    handleInputFocus();
+    setBpmState('COUNTDOWN');
+    setCountdownVal(5);
+    setBpmTimeLeft(600);
+    setSquatCount(0);
+
+    countdownRef.current = setInterval(() => {
+      setCountdownVal(prev => {
+        if (prev <= 1) {
+          clearInterval(countdownRef.current);
+          if (!isMuted) playWoodblockSound(true);
+          runMetronome();
+          return 0;
+        }
+        if (!isMuted) playWoodblockSound(false);
+        return prev - 1;
+      });
+    }, 1000);
+  };
+
+  const runMetronome = () => {
+    setBpmState('RUNNING');
+    
+    metronomeRef.current = setInterval(() => {
+      setVisualPulse(true);
+      setTimeout(() => setVisualPulse(false), 120);
+
+      if (!isMuted) {
+        playWoodblockSound(false);
+      }
+
+      setSquatCount(prev => {
+        const nextVal = prev + 1;
+        updateBpmExerciseScore(nextVal);
+        return nextVal;
+      });
+    }, 2000);
+
+    clockRef.current = setInterval(() => {
+      setBpmTimeLeft(prev => {
+        if (prev <= 1) {
+          stopBpmEngine(true);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  };
+
+  const updateBpmExerciseScore = (countVal) => {
+    const updated = exercises.map(ex => {
+      if (ex.id === 'b3') {
+        const updatedSets = [{ setNumber: 1, weight: '맨몸', reps: String(countVal), completed: true }];
+        return { ...ex, sets: updatedSets, completed: true };
+      }
+      return ex;
+    });
+    setExercises(updated);
+    saveCurrentProgress(updated, startTime, condition, sleepTime, notes);
+  };
+
+  const stopBpmEngine = (isCompleted = false) => {
+    if (countdownRef.current) clearInterval(countdownRef.current);
+    if (metronomeRef.current) clearInterval(metronomeRef.current);
+    if (clockRef.current) clearInterval(clockRef.current);
+
+    setBpmState(isCompleted ? 'FINISHED' : 'IDLE');
+    if (isCompleted) {
+      if (!isMuted) playWoodblockSound(true);
+      setModalMessage(`🏆 BPM 메트로놈 10분 정밀 스쿼트 코스를 무사히 돌파했습니다! 총 카운트: ${squatCount}회`);
+    }
+  };
+
+  // 세트별 핸들러
+  const handleSetFieldChange = (exerciseId, setIndex, field, value) => {
+    const updated = exercises.map(ex => {
+      if (ex.id === exerciseId) {
+        const updatedSets = [...ex.sets];
+        updatedSets[setIndex] = { ...updatedSets[setIndex], [field]: value };
+        const hasInputs = updatedSets.some(s => s.weight || s.reps);
+        return { ...ex, sets: updatedSets, completed: hasInputs };
+      }
+      return ex;
+    });
+    setExercises(updated);
+    saveCurrentProgress(updated, startTime, condition, sleepTime, notes);
+  };
+
+  const handleToggleSetComplete = (exerciseId, setIndex) => {
+    const updated = exercises.map(ex => {
+      if (ex.id === exerciseId) {
+        const updatedSets = [...ex.sets];
+        updatedSets[setIndex] = { ...updatedSets[setIndex], completed: !updatedSets[setIndex].completed };
+        const anyCompleted = updatedSets.some(s => s.completed);
+        return { ...ex, sets: updatedSets, completed: anyCompleted };
+      }
+      return ex;
+    });
+    setExercises(updated);
+    saveCurrentProgress(updated, startTime, condition, sleepTime, notes);
+  };
+
+  const handleAddSet = (exerciseId) => {
+    const updated = exercises.map(ex => {
+      if (ex.id === exerciseId) {
+        const nextSetNum = ex.sets.length + 1;
+        const updatedSets = [...ex.sets, { setNumber: nextSetNum, weight: '', reps: '', completed: false }];
+        return { ...ex, sets: updatedSets };
+      }
+      return ex;
+    });
+    setExercises(updated);
+    saveCurrentProgress(updated, startTime, condition, sleepTime, notes);
+  };
+
+  const handleRemoveSet = (exerciseId) => {
+    const updated = exercises.map(ex => {
+      if (ex.id === exerciseId) {
+        if (ex.sets.length <= 1) return ex;
+        const updatedSets = ex.sets.slice(0, -1);
+        return { ...ex, sets: updatedSets };
+      }
+      return ex;
+    });
+    setExercises(updated);
+    saveCurrentProgress(updated, startTime, condition, sleepTime, notes);
+  };
+
+  const handleToggleComplete = (id) => {
+    const updated = exercises.map(ex => {
+      if (ex.id === id) {
+        const nextStatus = !ex.completed;
+        const updatedSets = ex.sets.map(s => ({ ...s, completed: nextStatus }));
+        return { ...ex, completed: nextStatus, sets: updatedSets };
+      }
+      return ex;
+    });
+    setExercises(updated);
+    saveCurrentProgress(updated, startTime, condition, sleepTime, notes);
+  };
+
+  const handleRoutineSwitch = (routineType) => {
+    if (routineType === selectedRoutine) return;
+    saveCurrentProgress(exercises, startTime, condition, sleepTime, notes);
+    stopTimer();
+    stopBpmEngine(false);
+    setBpmEngineOpen(false);
+    setSelectedRoutine(routineType);
+  };
+
+  // 과거 이력 비교 배지
+  const getProgressBadge = (exerciseName, currentSets) => {
+    const validCurrentSets = currentSets.filter(s => s.weight && s.reps);
+    if (validCurrentSets.length === 0) return null;
+
+    const currentAvgWeight = validCurrentSets.reduce((sum, s) => sum + parseFloat(s.weight || 0), 0) / validCurrentSets.length;
+    const currentAvgReps = validCurrentSets.reduce((sum, s) => sum + parseFloat(s.reps || 0), 0) / validCurrentSets.length;
+
+    let matchingPrevSession = null;
+    let prevSets = [];
+    for (const session of history) {
+      const found = session.exercises.find(e => e.name === exerciseName && e.sets && e.sets.some(s => s.weight && s.reps));
+      if (found) {
+        prevSets = found.sets.filter(s => s.weight && s.reps);
+        if (prevSets.length > 0) {
+          matchingPrevSession = found;
+          break;
+        }
+      }
+    }
+
+    if (!matchingPrevSession) {
+      return { label: '첫 기록 🆕', color: 'bg-blue-50 text-blue-600 border border-blue-200' };
+    }
+
+    const prevAvgWeight = prevSets.reduce((sum, s) => sum + parseFloat(s.weight || 0), 0) / prevSets.length;
+    const prevAvgReps = prevSets.reduce((sum, s) => sum + parseFloat(s.reps || 0), 0) / prevSets.length;
+
+    if (currentAvgWeight > prevAvgWeight || (currentAvgWeight === prevAvgWeight && currentAvgReps > prevAvgReps)) {
+      return { 
+        label: `▲ 향상 (전회평균: ${prevAvgWeight.toFixed(1)}kg / ${prevAvgReps.toFixed(1)}회)`, 
+        color: 'bg-emerald-50 text-emerald-600 border border-emerald-200' 
+      };
+    } else if (currentAvgWeight === prevAvgWeight && currentAvgReps === prevAvgReps) {
+      return { label: '● 동일 성적 유지', color: 'bg-amber-50 text-amber-600 border border-amber-200' };
+    } else {
+      return { 
+        label: `▼ 하강 (전회평균: ${prevAvgWeight.toFixed(1)}kg / ${prevAvgReps.toFixed(1)}회)`, 
+        color: 'bg-rose-50 text-rose-600 border border-rose-200' 
+      };
+    }
+  };
+
+  const getCompletionRate = () => {
+    if (exercises.length === 0) return 0;
+    const completedCount = exercises.filter(e => e.completed).length;
+    return Math.round((completedCount / exercises.length) * 100);
+  };
+
+  const handleFinishWorkout = () => {
+    if (!startTime) {
+      setModalMessage("아직 기록이 개시되지 않았습니다. 실측치를 기입하거나 운동 세팅을 시작해 주세요.");
+      return;
+    }
+
+    stopTimer();
+    stopBpmEngine(false);
+    const now = new Date();
+    setEndTime(now);
+
+    const durationSeconds = Math.floor((now - startTime) / 1000);
+    const durationStr = formatTime(durationSeconds);
+
+    const completedSession = {
+      id: crypto.randomUUID(),
+      date,
+      routineType: selectedRoutine,
+      routineTitle: selectedRoutine === 'A' ? 'A루틴 (가슴, 등)' : 'B루틴 (하체, 팔, 어깨)',
+      condition,
+      sleepTime,
+      startTime: startTime.toISOString(),
+      endTime: now.toISOString(),
+      durationSeconds,
+      durationStr,
+      exercises,
+      notes,
+      completionRate: getCompletionRate()
+    };
+
+    const updatedHistory = [completedSession, ...history];
+    setHistory(updatedHistory);
+    localStorage.setItem('training_history_multisets_v4', JSON.stringify(updatedHistory));
+
+    localStorage.removeItem(`current_session_multisets_v4_routine_${selectedRoutine}`);
+    setShowCelebrate(true);
+  };
+
+  const handleResetSession = () => {
+    const confirmReset = window.confirm("진행 중인 입력 내역이 전면 지워집니다. 완전히 리셋할까요?");
+    if (confirmReset) {
+      stopTimer();
+      stopBpmEngine(false);
+      setBpmEngineOpen(false);
+      setStartTime(null);
+      setEndTime(null);
+      setElapsedSeconds(0);
+      setNotes('');
+      localStorage.removeItem(`current_session_multisets_v4_routine_${selectedRoutine}`);
+      setExercises(selectedRoutine === 'A' ? JSON.parse(JSON.stringify(ROUTINE_A)) : JSON.parse(JSON.stringify(ROUTINE_B)));
+    }
+  };
+
+  const handleAddCustomExercise = () => {
+    const name = prompt("종목명을 기입하세요:");
+    if (!name) return;
+    const targetSetsInput = prompt("목표 세트수 (숫자만):", "4");
+    const targetReps = prompt("목표 횟수 및 형태:", "12 - 15회");
+    const parsedSetsCount = parseInt(targetSetsInput, 10) || 3;
+
+    const newEx = {
+      id: 'custom_' + Date.now(),
+      name,
+      targetReps: targetReps || '자율',
+      targetSets: `${parsedSetsCount}세트`,
+      notes: '',
+      completed: false,
+      sets: createInitialSets(parsedSetsCount)
+    };
+
+    const updated = [...exercises, newEx];
+    setExercises(updated);
+    saveCurrentProgress(updated, startTime, condition, sleepTime, notes);
+  };
+
+  const handleDeleteHistory = (id) => {
+    if (confirm("이 기록을 파일에서 완전히 삭제하시겠습니까?")) {
+      const filtered = history.filter(h => h.id !== id);
+      setHistory(filtered);
+      localStorage.setItem('training_history_multisets_v4', JSON.stringify(filtered));
+    }
+  };
+
+  const formatTime = (totalSeconds) => {
+    const hrs = Math.floor(totalSeconds / 3600);
+    const mins = Math.floor((totalSeconds % 3600) / 60);
+    const secs = totalSeconds % 60;
+    return [
+      hrs > 0 ? String(hrs).padStart(2, '0') : null,
+      String(mins).padStart(2, '0'),
+      String(secs).padStart(2, '0')
+    ].filter(Boolean).join(':');
+  };
+
+  const formatBpmClock = (secs) => {
+    const m = Math.floor(secs / 60);
+    const s = secs % 60;
+    return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+  };
+
+  // --- 월력표 계산 핵심 알고리즘 ---
+  const handlePrevMonth = () => {
+    if (currentCalendarMonth === 0) {
+      setCurrentCalendarYear(prev => prev - 1);
+      setCurrentCalendarMonth(11);
+    } else {
+      setCurrentCalendarMonth(prev => prev - 1);
+    }
+  };
+
+  const handleNextMonth = () => {
+    if (currentCalendarMonth === 11) {
+      setCurrentCalendarYear(prev => prev + 1);
+      setCurrentCalendarMonth(0);
+    } else {
+      setCurrentCalendarMonth(prev => prev + 1);
+    }
+  };
+
+  const getWorkoutStatusOnDate = (year, month, day) => {
+    const formattedMonth = String(month + 1).padStart(2, '0');
+    const formattedDay = String(day).padStart(2, '0');
+    const targetDateStr = `${year}-${formattedMonth}-${formattedDay}`;
+
+    const sessionOnDate = history.find(h => h.date === targetDateStr && h.completionRate > 0);
+    
+    const todayObj = new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate());
+    const targetDateObj = new Date(year, month, day);
+
+    if (sessionOnDate) {
+      return 'WORKED'; // 운동 수행일 (💪✨)
+    } else if (targetDateObj <= todayObj) {
+      return 'RESTED'; // 운동 미실시/공백일 (😭💧)
+    }
+    return 'FUTURE';
+  };
+
+  const generateCalendarDays = () => {
+    const firstDayIndex = new Date(currentCalendarYear, currentCalendarMonth, 1).getDay();
+    const totalDays = new Date(currentCalendarYear, currentCalendarMonth + 1, 0).getDate();
+    const prevMonthTotalDays = new Date(currentCalendarYear, currentCalendarMonth, 0).getDate();
+
+    const days = [];
+
+    // 1. 이전 달 빈칸 채우기
+    for (let i = firstDayIndex - 1; i >= 0; i--) {
+      days.push({
+        day: prevMonthTotalDays - i,
+        isCurrentMonth: false,
+        status: 'FUTURE'
+      });
+    }
+
+    // 2. 현재 달 날짜 채우기
+    for (let i = 1; i <= totalDays; i++) {
+      days.push({
+        day: i,
+        isCurrentMonth: true,
+        status: getWorkoutStatusOnDate(currentCalendarYear, currentCalendarMonth, i)
+      });
+    }
+
+    // 3. 다음 달 빈칸 채우기
+    const remainingSlots = 42 - days.length;
+    for (let i = 1; i <= remainingSlots; i++) {
+      days.push({
+        day: i,
+        isCurrentMonth: false,
+        status: 'FUTURE'
+      });
+    }
+
+    return days;
+  };
+
+  const calendarDays = generateCalendarDays();
+  const weekDays = ['일', '월', '화', '수', '목', '금', '토'];
+  const monthNames = [
+    '1월', '2월', '3월', '4월', '5월', '6월',
+    '7월', '8월', '9월', '10월', '11월', '12월'
+  ];
+
+  const completionRate = getCompletionRate();
+
+  return (
+    <div className={`min-h-screen ${visualPulse ? 'bg-emerald-50/50' : 'bg-slate-50'} text-slate-800 font-sans transition-all duration-150 pb-20`}>
+      
+      {/* 헤더 */}
+      <header className="sticky top-0 z-25 bg-white/95 backdrop-blur-md border-b border-slate-200 px-4 py-3 shadow-sm">
+        <div className="max-w-4xl mx-auto flex items-center justify-between">
+          <div className="flex items-center space-x-2.5">
+            <div className="p-2.5 bg-gradient-to-tr from-teal-500 to-indigo-600 rounded-xl shadow-md">
+              <Dumbbell className="w-5 h-5 text-white animate-pulse" />
+            </div>
+            <div>
+              <h1 className="text-lg font-black tracking-tight text-slate-900">
+                Training Session
+              </h1>
+              <span className="text-[10px] font-bold text-slate-500 tracking-wide uppercase">정량적 분석 전술 트래커</span>
+            </div>
+          </div>
+
+          <div className="flex items-center space-x-3">
+            <div className="text-right hidden sm:block">
+              <span className="text-[10px] text-slate-400 block leading-tight">오늘 완료도</span>
+              <span className="text-sm font-extrabold text-teal-600">{completionRate}% 완수</span>
+            </div>
+            <div className="relative w-10 h-10 flex items-center justify-center">
+              <svg className="w-full h-full transform -rotate-90">
+                <circle cx="20" cy="20" r="17" stroke="currentColor" className="text-slate-100" strokeWidth="3" fill="transparent" />
+                <circle cx="20" cy="20" r="17" stroke="currentColor" className="text-teal-500 transition-all duration-300" strokeWidth="3" fill="transparent"
+                  strokeDasharray={107}
+                  strokeDashoffset={107 - (107 * completionRate) / 100}
+                />
+              </svg>
+              <span className="absolute text-[9px] font-black text-slate-700">{completionRate}%</span>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <main className="max-w-4xl mx-auto px-4 mt-6 space-y-6">
+        
+        {/* 통합 모드 탭 제어 */}
+        <div className="grid grid-cols-3 gap-1.5 bg-slate-200/60 p-1.5 rounded-2xl border border-slate-300/40 shadow-inner">
+          <button 
+            onClick={() => setActiveTab('workout')} 
+            className={`flex items-center justify-center space-x-2 py-3 rounded-xl text-xs font-bold transition-all ${
+              activeTab === 'workout' 
+                ? 'bg-white text-teal-600 border border-slate-200 shadow-sm' 
+                : 'text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            <Dumbbell className="w-4 h-4" />
+            <span>오늘의 훈련</span>
+          </button>
+          
+          <button 
+            onClick={() => setActiveTab('history')} 
+            className={`flex items-center justify-center space-x-2 py-3 rounded-xl text-xs font-bold transition-all ${
+              activeTab === 'history' 
+                ? 'bg-white text-teal-600 border border-slate-200 shadow-sm' 
+                : 'text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            <History className="w-4 h-4" />
+            <span>훈련 기록실</span>
+          </button>
+
+          <button 
+            onClick={() => setActiveTab('guide')} 
+            className={`flex items-center justify-center space-x-2 py-3 rounded-xl text-xs font-bold transition-all ${
+              activeTab === 'guide' 
+                ? 'bg-white text-teal-600 border border-slate-200 shadow-sm' 
+                : 'text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            <BookOpen className="w-4 h-4" />
+            <span>훈련 수칙</span>
+          </button>
+        </div>
+
+        {/* 탭 1: 운동 기록 카드 */}
+        {activeTab === 'workout' && (
+          <div className="space-y-6">
+
+            {/* 루틴 셀렉터 및 타이머 */}
+            <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm">
+              
+              {/* 루틴 전환 컨트롤러 */}
+              <div className="mb-5 pb-4 border-b border-slate-100">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-xs font-bold text-indigo-600 tracking-wider flex items-center gap-1.5 uppercase">
+                    <ArrowRightLeft className="w-3.5 h-3.5" /> 훈련 분할 타겟 전환
+                  </span>
+                  <button 
+                    onClick={handleResetSession}
+                    className="text-xs text-rose-500 hover:text-rose-600 transition-colors flex items-center gap-1 font-bold"
+                  >
+                    <RotateCcw className="w-3 h-3" /> 현재 데이터 비우기
+                  </button>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    onClick={() => handleRoutineSwitch('A')}
+                    className={`p-3.5 rounded-xl border text-left transition-all ${
+                      selectedRoutine === 'A'
+                        ? 'bg-gradient-to-br from-white to-slate-50/50 border-teal-500 text-slate-900 shadow-sm ring-1 ring-teal-500/20'
+                        : 'bg-slate-100/50 border-slate-200 text-slate-500 hover:bg-slate-100'
+                    }`}
+                  >
+                    <span className="text-[10px] block font-semibold text-indigo-500 mb-0.5">SESSION A</span>
+                    <span className="text-sm font-bold block">가슴, 등 루틴</span>
+                    <span className="text-[11px] text-slate-400 block mt-1">벤치프레스 / 푸쉬업 등 10종</span>
+                  </button>
+
+                  <button
+                    onClick={() => handleRoutineSwitch('B')}
+                    className={`p-3.5 rounded-xl border text-left transition-all ${
+                      selectedRoutine === 'B'
+                        ? 'bg-gradient-to-br from-white to-slate-50/50 border-teal-500 text-slate-900 shadow-sm ring-1 ring-teal-500/20'
+                        : 'bg-slate-100/50 border-slate-200 text-slate-500 hover:bg-slate-100'
+                    }`}
+                  >
+                    <span className="text-[10px] block font-semibold text-indigo-500 mb-0.5">SESSION B</span>
+                    <span className="text-sm font-bold block">하체, 팔, 어깨 루틴</span>
+                    <span className="text-[11px] text-slate-400 block mt-1">레그프레스 / 스쿼트 등 11종</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* 기본 메타 상세 정보 설정 */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-4">
+                  <span className="text-xs font-bold text-slate-500 uppercase tracking-wide block">기초 컨디션 설정</span>
+                  
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[10px] text-slate-500 mb-1 font-bold">훈련 시작일</label>
+                      <input 
+                        type="date" 
+                        value={date}
+                        onChange={(e) => setDate(e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-teal-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] text-slate-500 mb-1 font-bold">수면 (시간)</label>
+                      <input 
+                        type="number" 
+                        value={sleepTime} 
+                        onChange={(e) => {
+                          setSleepTime(e.target.value);
+                          saveCurrentProgress(exercises, startTime, condition, e.target.value, notes);
+                        }}
+                        placeholder="7"
+                        className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-teal-500"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] text-slate-500 mb-1.5 font-bold">오늘의 기상 피로도 및 컨디션</label>
+                    <div className="grid grid-cols-4 gap-1.5">
+                      {['Bad 😫', 'Normal 😐', 'Good ⚡', 'Excellent 🔥'].map((cond) => (
+                        <button
+                          key={cond}
+                          onClick={() => {
+                            setCondition(cond);
+                            saveCurrentProgress(exercises, startTime, cond, sleepTime, notes);
+                          }}
+                          className={`py-1.5 px-0.5 text-[10px] font-bold rounded-lg border text-center transition-all ${
+                            condition === cond 
+                              ? 'bg-indigo-600 border-indigo-500 text-white shadow-sm' 
+                              : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+                          }`}
+                        >
+                          {cond}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                {/* 타이머 서브 계기판 */}
+                <div className="bg-slate-50 rounded-xl p-4 flex flex-col justify-between border border-slate-200">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-bold text-slate-500 tracking-wider uppercase flex items-center gap-1">
+                      <Clock className="w-3 text-indigo-600" /> 세션 총 시간
+                    </span>
+                    {isTimerRunning && (
+                      <span className="flex h-1.5 w-1.5 relative">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-teal-500 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-teal-600"></span>
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="my-3 text-center">
+                    <div className="text-3xl font-mono font-black tracking-widest text-slate-900">
+                      {formatTime(elapsedSeconds)}
+                    </div>
+                    <p className="text-[9px] text-slate-400 mt-0.5 font-medium">수치 기입 혹은 엔진 구동 시 가동</p>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    {!isTimerRunning ? (
+                      <button 
+                        onClick={() => startTimer()} 
+                        className="bg-teal-600 hover:bg-teal-500 text-white text-[11px] font-black py-1.5 rounded-lg transition-colors flex items-center justify-center gap-1 shadow-sm"
+                      >
+                        <Flame className="w-3 h-3" /> 대기 타이머 시작
+                      </button>
+                    ) : (
+                      <button 
+                        onClick={stopTimer} 
+                        className="bg-amber-500 hover:bg-amber-600 text-white text-[11px] font-bold py-1.5 rounded-lg transition-colors flex items-center justify-center gap-1 shadow-sm"
+                      >
+                        <Clock className="w-3 h-3" /> 타이머 일시정지
+                      </button>
+                    )}
+
+                    <button 
+                      onClick={handleFinishWorkout}
+                      className="bg-indigo-600 hover:bg-indigo-500 text-white text-[11px] font-bold py-1.5 rounded-lg transition-all flex items-center justify-center gap-1 shadow-sm"
+                    >
+                      <CheckCircle2 className="w-3 h-3" /> 전체 훈련 저장
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* 운동 상세 루틴 리스트 */}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between px-1">
+                <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                  <Dumbbell className="w-4 h-4 text-teal-600" />
+                  <span>
+                    실시할 {selectedRoutine === 'A' ? 'A루틴 (가슴, 등)' : 'B루틴 (하체, 팔, 어깨)'} 종목 리스트
+                  </span>
+                </h3>
+                <button 
+                  onClick={handleAddCustomExercise}
+                  className="bg-white hover:bg-slate-50 text-[10px] text-slate-700 px-3 py-1.5 rounded-lg border border-slate-200 transition-colors flex items-center gap-1 font-bold shadow-sm"
+                >
+                  <Plus className="w-3 h-3" /> 커스텀 추가
+                </button>
+              </div>
+
+              {exercises.map((ex, index) => {
+                const badge = getProgressBadge(ex.name, ex.sets);
+
+                return (
+                  <div 
+                    key={ex.id}
+                    className={`rounded-xl border transition-all duration-200 ${
+                      ex.completed 
+                        ? 'bg-slate-100/50 border-teal-500/30' 
+                        : 'bg-white border-slate-200 hover:border-slate-300 shadow-sm'
+                    }`}
+                  >
+                    {/* 카드 타이틀 헤더 */}
+                    <div className="flex items-center justify-between p-3 bg-slate-50/50 border-b border-slate-200/60">
+                      <div className="flex items-center space-x-3 flex-1 min-w-0">
+                        <button
+                          onClick={() => handleToggleComplete(ex.id)}
+                          className={`w-5 h-5 rounded flex items-center justify-center transition-all shrink-0 ${
+                            ex.completed 
+                              ? 'bg-teal-500 text-white' 
+                              : 'border border-slate-300 text-transparent hover:border-teal-500'
+                          }`}
+                        >
+                          <Check className="w-3.5 h-3.5 stroke-[3.5]" />
+                        </button>
+                        
+                        <div className="min-w-0 flex-1">
+                          <span className={`text-xs font-extrabold block truncate ${ex.completed ? 'line-through text-slate-400' : 'text-slate-800'}`}>
+                            {index + 1}. {ex.name}
+                          </span>
+                          <span className="text-[10px] text-indigo-600 block font-bold mt-0.5">
+                            가이드 세트: {ex.targetSets} × {ex.targetReps}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* 실시간 비교 배지 */}
+                      <div className="ml-2 flex items-center gap-1.5 shrink-0">
+                        {badge && (
+                          <span className={`text-[9px] px-2 py-0.5 rounded-full font-bold border transition-all ${badge.color}`}>
+                            {badge.label}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* 세트별 입력부 및 BPM 스쿼트 엔진 특화 설계 */}
+                    {ex.id === 'b3' ? (
+                      <div className="p-4 bg-slate-50/50 space-y-4">
+                        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-slate-100/60 p-3.5 rounded-xl border border-slate-200">
+                          <div className="space-y-1 text-center sm:text-left">
+                            <span className="text-xs bg-teal-100 text-teal-700 px-2.5 py-1 rounded-full border border-teal-200 font-bold inline-block">
+                              메트로놈 통합 제어 탑재
+                            </span>
+                            <h4 className="text-xs font-black text-slate-800 pt-1">
+                              30 BPM 메트로놈 (2초 주기 딱-딱- 타격음) × 10분 완주 스펙
+                            </h4>
+                            <p className="text-[10px] text-slate-500 font-medium">
+                              사전 준비 카운트다운 5초 후 시작하며 2초마다 "딱" 타격음이 확실하게 송출됩니다.
+                            </p>
+                          </div>
+                          <button
+                            onClick={() => {
+                              initAudioContext();
+                              setBpmEngineOpen(!bpmEngineOpen);
+                            }}
+                            className="bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold py-2 px-4 rounded-lg flex items-center gap-1.5 shrink-0 transition-colors shadow-sm"
+                          >
+                            <Timer className="w-4 h-4" />
+                            {bpmEngineOpen ? '메트로놈 닫기' : '메트로놈 콘솔 열기'}
+                          </button>
+                        </div>
+
+                        {/* 실시간 전술 메트로놈 패널 */}
+                        {bpmEngineOpen && (
+                          <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-4 relative overflow-hidden animate-in slide-in-from-top-3 duration-200 shadow-inner">
+                            
+                            {/* 백그라운드 맥박(비트 플래시) */}
+                            {visualPulse && (
+                              <div className="absolute inset-0 bg-emerald-500/10 pointer-events-none transition-all duration-75"></div>
+                            )}
+
+                            <div className="flex items-center justify-between">
+                              <span className="text-[11px] font-black text-slate-500 tracking-wider flex items-center gap-1">
+                                <Volume2 className="w-3.5 h-3.5 text-teal-600" /> BPM TACTICAL METRONOME
+                              </span>
+
+                              {/* 음소거 컨트롤 */}
+                              <button
+                                onClick={() => setIsMuted(!isMuted)}
+                                className="text-slate-400 hover:text-slate-600 transition-colors"
+                              >
+                                {isMuted ? <VolumeX className="w-4 h-4 text-rose-500" /> : <Volume2 className="w-4 h-4 text-emerald-600" />}
+                              </button>
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-center text-center">
+                              
+                              <div className="bg-white rounded-lg p-3 border border-slate-200 shadow-sm">
+                                <span className="text-[9px] text-slate-500 block uppercase font-bold">남은 훈련 시간</span>
+                                <span className="text-2xl font-mono font-black text-slate-800">
+                                  {formatBpmClock(bpmTimeLeft)}
+                                </span>
+                              </div>
+
+                              <div className="py-2">
+                                {bpmState === 'IDLE' && (
+                                  <span className="text-xs text-slate-400 font-bold block">준비 대기중</span>
+                                )}
+                                {bpmState === 'COUNTDOWN' && (
+                                  <div className="animate-ping text-3xl font-black text-indigo-600">
+                                    {countdownVal}
+                                  </div>
+                                )}
+                                {bpmState === 'RUNNING' && (
+                                  <div className="flex flex-col items-center">
+                                    <span className="w-3.5 h-3.5 bg-emerald-500 rounded-full animate-bounce"></span>
+                                    <span className="text-[10px] text-emerald-600 font-bold mt-1">30 BPM 진행중</span>
+                                  </div>
+                                )}
+                                {bpmState === 'FINISHED' && (
+                                  <span className="text-xs text-teal-600 font-black block">훈련 임무완수!</span>
+                                )}
+                              </div>
+
+                              <div className="bg-white rounded-lg p-3 border border-slate-200 shadow-sm">
+                                <span className="text-[9px] text-slate-500 block uppercase font-bold">자동 산정 횟수</span>
+                                <span className="text-2xl font-mono font-black text-teal-600">
+                                  {squatCount} <span className="text-[10px] text-slate-400 font-bold">회</span>
+                                </span>
+                              </div>
+                            </div>
+
+                            <div className="flex gap-2">
+                              {bpmState === 'IDLE' || bpmState === 'FINISHED' ? (
+                                <button
+                                  onClick={startBpmSquatEngine}
+                                  className="flex-1 bg-teal-500 hover:bg-teal-600 text-white text-xs font-black py-2.5 rounded-lg flex items-center justify-center gap-1.5 transition-colors shadow-sm"
+                                >
+                                  <Play className="w-4.5 h-4.5 fill-white text-white" />
+                                  5초 카운트다운 후 메트로놈 시작
+                                </button>
+                              ) : (
+                                <button
+                                  onClick={() => stopBpmEngine(false)}
+                                  className="flex-1 bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold py-2.5 rounded-lg flex items-center justify-center gap-1.5 transition-colors shadow-sm"
+                                >
+                                  <Square className="w-3.5 h-3.5 fill-white text-white" />
+                                  메트로놈 중지
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* 스쿼트 데이터 수동 수정도 병행 허용 */}
+                        <div className="grid grid-cols-12 gap-2 items-center text-center text-xs py-1.5 border-t border-slate-200">
+                          <span className="col-span-3 text-slate-500 font-bold">실행 기록</span>
+                          <div className="col-span-9 relative">
+                            <input 
+                              type="number" 
+                              value={ex.sets[0].reps} 
+                              onChange={(e) => handleSetFieldChange(ex.id, 0, 'reps', e.target.value)}
+                              className="w-full bg-white border border-slate-200 rounded-lg py-1 px-3 text-xs text-center focus:outline-none focus:border-teal-500 text-teal-600 font-bold"
+                            />
+                            <span className="absolute right-3.5 top-1.5 text-[10px] text-slate-400 font-bold">총 횟수</span>
+                          </div>
+                        </div>
+
+                      </div>
+                    ) : (
+                      // 일반 종목 멀티 세트 레이아웃
+                      <div className="p-3 bg-slate-50/50 space-y-2">
+                        <div className="grid grid-cols-12 gap-2 text-center text-[10px] text-slate-400 font-bold border-b border-slate-200 pb-1">
+                          <span className="col-span-2">세트</span>
+                          <span className="col-span-4">중량 (kg)</span>
+                          <span className="col-span-4">횟수 (회)</span>
+                          <span className="col-span-2">완료</span>
+                        </div>
+
+                        {ex.sets && ex.sets.map((set, setIdx) => (
+                          <div 
+                            key={setIdx} 
+                            className={`grid grid-cols-12 gap-2 items-center text-center py-1 rounded-lg transition-colors ${
+                              set.completed ? 'bg-emerald-50/50' : 'bg-transparent'
+                            }`}
+                          >
+                            <span className="col-span-2 text-xs font-bold text-slate-500">
+                              {set.setNumber}set
+                            </span>
+
+                            <div className="col-span-4 relative">
+                              <input 
+                                type="number" 
+                                placeholder="kg" 
+                                value={set.weight}
+                                onFocus={handleInputFocus}
+                                onChange={(e) => handleSetFieldChange(ex.id, setIdx, 'weight', e.target.value)}
+                                className="w-full bg-white border border-slate-200 rounded-lg py-1 px-2 text-xs text-center focus:outline-none focus:border-teal-500 text-slate-800"
+                              />
+                            </div>
+
+                            <div className="col-span-4 relative">
+                              <input 
+                                type="number" 
+                                placeholder="reps" 
+                                value={set.reps}
+                                onFocus={handleInputFocus}
+                                onChange={(e) => handleSetFieldChange(ex.id, setIdx, 'reps', e.target.value)}
+                                className="w-full bg-white border border-slate-200 rounded-lg py-1 px-2 text-xs text-center focus:outline-none focus:border-teal-500 text-slate-800"
+                              />
+                            </div>
+
+                            <div className="col-span-2 flex justify-center">
+                              <button
+                                onClick={() => handleToggleSetComplete(ex.id, setIdx)}
+                                className={`w-4 h-4 rounded transition-all ${
+                                  set.completed 
+                                    ? 'bg-emerald-500 text-white' 
+                                    : 'border border-slate-350 text-transparent hover:border-emerald-500'
+                                }`}
+                              >
+                                <Check className="w-3 h-3 mx-auto stroke-[4] text-white" />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+
+                        <div className="flex items-center justify-between pt-2 border-t border-slate-200">
+                          <div className="flex space-x-1.5">
+                            <button
+                              onClick={() => handleAddSet(ex.id)}
+                              className="bg-slate-100 hover:bg-slate-200 text-[10px] text-indigo-600 border border-slate-200 px-2.5 py-1 rounded-md flex items-center gap-1 font-bold shadow-sm"
+                            >
+                              <Plus className="w-3 h-3" /> 세트 추가
+                            </button>
+                            <button
+                              onClick={() => handleRemoveSet(ex.id)}
+                              className="bg-slate-100 hover:bg-slate-200 text-[10px] text-rose-600 border border-slate-200 px-2.5 py-1 rounded-md flex items-center gap-1 font-bold shadow-sm"
+                            >
+                              <Minus className="w-3 h-3" /> 세트 삭제
+                            </button>
+                          </div>
+
+                          <div className="flex-1 ml-3 max-w-xs">
+                            <input 
+                              type="text" 
+                              placeholder={ex.notes || "특이사항 기재"} 
+                              value={ex.notes || ''}
+                              onFocus={handleInputFocus}
+                              onChange={(e) => handleFieldChange(ex.id, 'notes', e.target.value)}
+                              className="w-full bg-white border border-slate-200 rounded-lg py-1 px-2 text-[11px] focus:outline-none focus:border-teal-500 text-slate-700"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* 운동후기 및 식단일지 자유 작성 */}
+            <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
+              <label className="block text-xs font-extrabold text-slate-700 mb-2 flex items-center gap-1.5">
+                <Smile className="text-teal-600 w-4 h-4" /> 운동 후기 / 식단 일지 등 자유롭게 작성
+              </label>
+              <textarea 
+                rows="3"
+                value={notes}
+                onFocus={handleInputFocus}
+                onChange={(e) => {
+                  setNotes(e.target.value);
+                  saveCurrentProgress(exercises, startTime, condition, sleepTime, e.target.value);
+                }}
+                placeholder="오늘 세션 영양소 섭취 비율, 혹은 수행 완료 후 느낀 주관적 부하 강도를 세부적으로 메모하세요."
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs text-slate-800 focus:outline-none focus:border-teal-500"
+              />
+            </div>
+
+            {/* 메인 완수 트리거 버튼 */}
+            <div className="pt-2">
+              <button 
+                onClick={handleFinishWorkout}
+                className="w-full bg-gradient-to-r from-teal-500 to-indigo-600 hover:from-teal-400 hover:to-indigo-500 text-white font-black py-4 rounded-xl shadow-md transition-all flex items-center justify-center gap-2 text-xs tracking-wider"
+              >
+                <Award className="w-4.5 h-4.5 text-white" /> 
+                오늘의 {selectedRoutine === 'A' ? 'A 가슴, 등' : 'B 하체, 팔, 어깨'} 세션 완료 및 일지 저장
+              </button>
+            </div>
+
+          </div>
+        )}
+
+        {/* 탭 2: 역사 기록실 (달력 수록) */}
+        {activeTab === 'history' && (
+          <div className="space-y-6">
+            
+            {/* 훈련 기록실 전용 월력표(캘린더) 배치 */}
+            <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm">
+              <div className="flex items-center justify-between border-b border-slate-200 pb-3 mb-4">
+                <div className="flex items-center space-x-2">
+                  <CalendarIcon className="w-4.5 h-4.5 text-teal-600 animate-pulse" />
+                  <h3 className="text-sm font-black text-slate-900">
+                    훈련 완수 기록 월력표 ({currentCalendarYear}년 {monthNames[currentCalendarMonth]})
+                  </h3>
+                </div>
+                <div className="flex items-center space-x-1.5">
+                  <button 
+                    onClick={handlePrevMonth} 
+                    className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-500 hover:text-slate-800 transition-all border border-slate-200"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </button>
+                  <button 
+                    onClick={handleNextMonth} 
+                    className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-500 hover:text-slate-800 transition-all border border-slate-200"
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+
+              {/* 달력 본체 그리드 */}
+              <div className="grid grid-cols-7 gap-2 text-center">
+                {weekDays.map((wd, index) => (
+                  <span key={index} className="text-[10px] font-bold text-slate-400 pb-1">
+                    {wd}
+                  </span>
+                ))}
+
+                {calendarDays.map((dayObj, index) => {
+                  const isToday = 
+                    new Date().getDate() === dayObj.day && 
+                    new Date().getMonth() === currentCalendarMonth && 
+                    new Date().getFullYear() === currentCalendarYear && 
+                    dayObj.isCurrentMonth;
+
+                  return (
+                    <div 
+                      key={index} 
+                      onClick={() => {
+                        if (dayObj.isCurrentMonth) {
+                          const formattedMonth = String(currentCalendarMonth + 1).padStart(2, '0');
+                          const formattedDay = String(dayObj.day).padStart(2, '0');
+                          setDate(`${currentCalendarYear}-${formattedMonth}-${formattedDay}`);
+                          setActiveTab('workout');
+                        }
+                      }}
+                      className={`aspect-square flex flex-col items-center justify-between p-1 rounded-xl border transition-all cursor-pointer relative ${
+                        dayObj.isCurrentMonth 
+                          ? isToday 
+                            ? 'bg-white border-teal-500 shadow-sm ring-1 ring-teal-500/20' 
+                            : 'bg-slate-50 border-slate-200 hover:border-slate-300' 
+                          : 'bg-slate-100/30 border-transparent text-slate-300'
+                      }`}
+                    >
+                      <span className={`text-[10px] font-black ${
+                        dayObj.isCurrentMonth 
+                          ? isToday 
+                            ? 'text-teal-600 font-extrabold' 
+                            : 'text-slate-500' 
+                          : 'text-slate-300'
+                      }`}>
+                        {dayObj.day}
+                      </span>
+
+                      {dayObj.isCurrentMonth && (
+                        <div className="flex-1 flex items-center justify-center">
+                          {dayObj.status === 'WORKED' && (
+                            <span 
+                              className="text-xs font-black animate-pulse drop-shadow-md"
+                              title="훈련 완료! 💪✨"
+                            >
+                              💪✨
+                            </span>
+                          )}
+                          {dayObj.status === 'RESTED' && (
+                            <span 
+                              className="text-[10px] opacity-60 hover:opacity-100 transition-opacity" 
+                              title="훈련 미실시 또는 공백 😭💧"
+                            >
+                              😭💧
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="flex items-center justify-between mt-3 pt-2 border-t border-slate-200 text-[10px] text-slate-400 font-bold">
+                <span className="flex items-center gap-1 text-slate-600">💪✨ 운동 완료일 (알통 반짝임)</span>
+                <span className="flex items-center gap-1 text-slate-400">😭💧 미실시 또는 공백 (눈물 표시)</span>
+              </div>
+            </div>
+
+            {/* 정밀 트레이닝 완수 카드 목록 */}
+            <div className="flex items-center justify-between px-1">
+              <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                <TrendingUp className="w-4.5 h-4.5 text-teal-600" /> 세션별 세부 훈련 일지 기록실
+              </h3>
+              <span className="text-[10px] bg-white border border-slate-200 text-slate-700 px-3 py-1.5 rounded-full font-bold shadow-sm">
+                완료 세션 수: {history.length}회
+              </span>
+            </div>
+
+            {history.length === 0 ? (
+              <div className="bg-white border border-slate-200 rounded-2xl p-10 text-center text-slate-400 shadow-sm">
+                <Dumbbell className="w-10 h-10 mx-auto mb-3 opacity-30 text-slate-600" />
+                <p className="text-xs font-bold">기록된 트레이닝 이력이 없습니다.</p>
+                <p className="text-[11px] mt-1 text-slate-500 font-medium">훈련 완료 시 이 보관함에 즉시 영구 기록됩니다.</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {history.map((session) => (
+                  <div key={session.id} className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
+                    <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-3">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="font-extrabold text-xs text-slate-900">{session.date}</span>
+                        <span className="text-[9px] bg-indigo-50 text-indigo-700 px-2.5 py-0.5 rounded-md border border-indigo-100 font-bold">
+                          {session.routineTitle}
+                        </span>
+                        <span className="text-[9px] bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-md border border-emerald-100 font-bold">
+                          완수률: {session.completionRate}%
+                        </span>
+                      </div>
+                      
+                      <button 
+                        onClick={() => handleDeleteHistory(session.id)}
+                        className="text-slate-400 hover:text-rose-600 transition-colors p-1"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-2 mb-3">
+                      <div className="bg-slate-50 rounded-lg p-2 text-center border border-slate-100">
+                        <span className="text-[9px] text-slate-400 block font-bold">수면 시간</span>
+                        <span className="text-xs font-bold text-slate-700">{session.sleepTime}시간</span>
+                      </div>
+                      <div className="bg-slate-50 rounded-lg p-2 text-center border border-slate-100">
+                        <span className="text-[9px] text-slate-400 block font-bold">총 훈련시간</span>
+                        <span className="text-xs font-bold text-slate-700">{session.durationStr || '측정 안됨'}</span>
+                      </div>
+                      <div className="bg-slate-50 rounded-lg p-2 text-center border border-slate-100">
+                        <span className="text-[9px] text-slate-400 block font-bold">컨디션</span>
+                        <span className="text-xs font-bold text-slate-700">{session.condition}</span>
+                      </div>
+                    </div>
+
+                    <div className="bg-slate-50 rounded-xl p-3 border border-slate-100 max-h-56 overflow-y-auto mb-3">
+                      <span className="text-[10px] text-slate-400 font-extrabold block mb-1.5 uppercase">수행 종목 및 세트 디테일</span>
+                      <div className="space-y-3">
+                        {session.exercises.map((ex, idx) => {
+                          const validSets = ex.sets ? ex.sets.filter(s => s.weight || s.reps) : [];
+                          return (
+                            <div key={idx} className="border-b border-slate-200 pb-2 last:border-0 last:pb-0">
+                              <span className={`text-xs font-extrabold block ${ex.completed ? 'text-slate-800' : 'text-slate-400 line-through'}`}>
+                                {ex.name}
+                              </span>
+                              {validSets.length > 0 ? (
+                                <div className="grid grid-cols-2 gap-1.5 mt-1.5">
+                                  {validSets.map((s, sIdx) => (
+                                    <div key={sIdx} className="text-[10px] text-slate-500 bg-white px-2 py-1 rounded border border-slate-200 flex justify-between shadow-sm">
+                                      <span>{s.setNumber}세트</span>
+                                      <span className="font-mono text-slate-700 font-bold">
+                                        {s.weight ? `${s.weight}kg` : '0kg'} / {s.reps ? `${s.reps}회` : '0회'}
+                                      </span>
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : (
+                                <span className="text-[10px] text-slate-400 italic block mt-0.5">수행 세트 데이터가 기재되지 않음</span>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {session.notes && (
+                      <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-100">
+                        <span className="text-[10px] font-bold text-indigo-600 block mb-1">📝 훈련 세션 종합 피드백</span>
+                        <p className="text-[11px] text-slate-600 leading-relaxed font-medium">{session.notes}</p>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* 탭 3: 가이드라인 수칙 */}
+        {activeTab === 'guide' && (
+          <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm space-y-5">
+            <div className="flex items-center space-x-2 border-b border-slate-200 pb-3">
+              <BookOpen className="w-4.5 h-4.5 text-teal-600" />
+              <h2 className="text-md font-bold text-slate-900">가슴, 등 (A) 및 하체, 팔, 어깨 (B) 훈련 통합 수칙</h2>
+            </div>
+
+            <div className="space-y-3">
+              {GUIDELINES.map((guide, idx) => (
+                <div key={idx} className="flex items-start space-x-3 p-3 rounded-xl bg-slate-50 border border-slate-150">
+                  <div className="w-5 h-5 rounded-full bg-slate-100 text-indigo-600 border border-slate-200 flex items-center justify-center text-[10px] font-black shrink-0">
+                    {idx + 1}
+                  </div>
+                  <p className="text-xs text-slate-600 leading-relaxed pt-0.5 font-bold">
+                    {guide}
+                  </p>
+                </div>
+              ))}
+            </div>
+
+            <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-3 text-center">
+              <span className="text-[11px] font-bold text-indigo-600 block mb-1">💡 중요 권고사항</span>
+              <p className="text-[10px] text-slate-500 leading-relaxed font-medium">
+                바벨 컬과 트라이셉스 익스텐션의 무게 상승 플랜, 사이드 레터럴 레이즈의 60회 달성 시 무게 상향 규칙을 엄격하게 지켜 점진적 과부하를 정복하세요.
+              </p>
+            </div>
+          </div>
+        )}
+
+      </main>
+
+      {/* 브라우저 alert 대체용 모달 */}
+      {modalMessage && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm">
+          <div className="bg-white border border-slate-200 rounded-xl max-w-sm w-full p-5 text-center shadow-lg">
+            <Info className="w-8 h-8 text-indigo-600 mx-auto mb-3" />
+            <p className="text-xs text-slate-700 leading-relaxed mb-4 font-bold">{modalMessage}</p>
+            <button
+              onClick={() => setModalMessage(null)}
+              className="bg-indigo-600 text-white text-xs px-5 py-2 rounded-lg font-bold hover:bg-indigo-500 shadow-sm"
+            >
+              확인
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* 완수 축하 모달 팝업 */}
+      {showCelebrate && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
+          <div className="bg-white border border-slate-200 rounded-2xl max-w-sm w-full p-6 text-center shadow-xl relative overflow-hidden">
+            
+            <div className="mx-auto w-12 h-12 bg-gradient-to-tr from-teal-400 to-indigo-600 rounded-full flex items-center justify-center mb-4">
+              <Award className="w-6 h-6 text-white" />
+            </div>
+
+            <h3 className="text-md font-extrabold text-slate-900 mb-1 flex items-center justify-center gap-1.5">
+              <Sparkles className="w-4 h-4 text-amber-500 animate-bounce" /> {selectedRoutine === 'A' ? 'A루틴 (가슴/등)' : 'B루틴 (하체/팔/어깨)'} 완료!
+            </h3>
+            <p className="text-[11px] text-slate-500 mb-4 font-medium">근성장과 일관성 유지에 한걸음 더 다가섰습니다.</p>
+
+            <div className="bg-slate-50 rounded-xl p-3 border border-slate-100 space-y-1.5 mb-5 text-left text-xs">
+              <div className="flex justify-between text-slate-500 font-bold">
+                <span>총 소요 시간</span>
+                <span className="text-slate-800 font-black">{formatTime(elapsedSeconds)}</span>
+              </div>
+              <div className="flex justify-between text-slate-500 font-bold">
+                <span>세션 완수도</span>
+                <span className="text-teal-600 font-black">{completionRate}%</span>
+              </div>
+              <div className="flex justify-between text-slate-500 font-bold">
+                <span>수면 조건 / 상태</span>
+                <span className="text-indigo-600 font-black">{sleepTime}시간 / {condition}</span>
+              </div>
+            </div>
+
+            <button
+              onClick={() => {
+                setShowCelebrate(false);
+                setElapsedSeconds(0);
+                setStartTime(null);
+                setEndTime(null);
+                setNotes('');
+                setExercises(selectedRoutine === 'A' ? JSON.parse(JSON.stringify(ROUTINE_A)) : JSON.parse(JSON.stringify(ROUTINE_B)));
+              }}
+              className="w-full bg-teal-500 hover:bg-teal-600 text-white text-xs font-bold py-3 rounded-xl transition-all shadow-sm"
+            >
+              다음 훈련 준비하기
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* 하단 고정 상태 안내 */}
+      <footer className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 py-2.5 text-center text-[10px] text-slate-500 font-bold uppercase tracking-wider z-10 shadow-md">
+        Training Session Pro • A, B 분할 훈련 추적 시스템
+      </footer>
+
+    </div>
+  );
+}
